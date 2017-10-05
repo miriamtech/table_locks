@@ -1,3 +1,42 @@
 = TableLocks
 
-This project rocks and uses MIT-LICENSE.
+== Description
+
+TableLocks is an ActiveSupport::Concern concern for acheiving locking in
+Rails using PostgreSQL table locking.
+
+== Usage
+  
+Create a model:
+
+  class CreateExampleLocks < ActiveRecord::Migration
+    def change
+      create_table :example_locks do |t|
+      end
+    end
+  end
+
+Include the TableLocks concern:
+
+  class ExampleLock < ActiveRecord::Base
+    include TableLocks
+  end
+
+Lock in NOWAIT mode (SHARE UPDATE EXCLUSIVE MODE NOWAIT):
+
+  begin
+    ExampleLock.exclusive_nowait do
+      # You're the only one executing this code right now
+    end
+  rescue PG::LockNotAvailable
+    # Someone else beat us to it
+  end
+
+Lock but wait (SHARE UPDATE EXCLUSIVE MODE):
+
+  ExampleLock.exclusive do
+    # You're the only one executing this code right now
+  end
+
+See PostgreSQL locking documentation for more information:
+https://www.postgresql.org/docs/9.6/static/explicit-locking.html
