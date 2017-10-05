@@ -1,0 +1,17 @@
+db:
+  image: postgres:9.3
+  environment:
+    POSTGRES_PASSWORD: password
+  ports:
+    - "5432"
+
+web: &web
+  build: .
+  environment:
+    PASSENGER_APP_ENV: development
+  volumes:
+    - .:/home/app/table_locks
+  ports:
+    - "80:80"
+  links:
+    - db
