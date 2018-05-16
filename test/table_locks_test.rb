@@ -1,7 +1,8 @@
 require 'test_helper'
 
 class TableLocksTest < ActiveSupport::TestCase
-
+  self.use_transactional_tests = false
+  
   def setup
     @threads = []
     @monitor = Monitor.new

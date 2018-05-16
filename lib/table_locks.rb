@@ -22,8 +22,8 @@ module TableLocks
             end
             yield
           rescue ActiveRecord::StatementInvalid => e
-            if e.original_exception.is_a?(PG::LockNotAvailable)
-              raise e.original_exception
+            if e.cause.is_a?(PG::LockNotAvailable)
+              raise e.cause
             else
               raise
             end
