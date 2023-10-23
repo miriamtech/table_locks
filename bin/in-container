@@ -1,0 +1,53 @@
+#!/bin/bash -e
+
+SERVICE_NAME="web"
+SOURCED="false"
+
+# Detect whether we were invoked directly or sourced from another script.
+# This works because `return` is only allowed from a function or a sourced script.
+(return 0 >&/dev/null) && SOURCED="true"
+
+OPTIND=1
+while getopts ":hs:" opt; do
+	case $opt in
+		s)
+			SERVICE_NAME="$OPTARG"
+			;;
+		h)
+			echo "Usage:"
+			echo "  in-container [options] <command...>"
+			echo ""
+			echo "  Run <command> within compose service container. By default,"
+			echo "  this uses the 'web' service, but this can be configured with"
+			echo "  the \`-s' option."
+			echo ""
+			echo "  -h: Display this help message"
+			echo "  -s <service name>: Run in <service name> container instead of web."
+			exit 0
+			;;
+		\?)
+			echo "Invalid option: -$OPTARG" >&2
+			exit 1
+			;;
+		:)
+			echo "Option -$OPTARG requires an argument" >&2
+			exit 1
+			;;
+	esac
+done
+shift $((OPTIND-1))
+
+if [ ! -f '/.dockerenv' ]; then
+	if docker help | grep -q compose; then
+		command='docker compose'
+	else
+		command='docker-compose'
+	fi
+	exec $command run --rm "$SERVICE_NAME" setuser app "$@"
+fi
+
+# If we got to this point, we're running in the container
+# Prevent recursion by only invoking "exec" if we weren't sourced from another script.
+if [ "$SOURCED" != "true" ]; then
+	exec "$@"
+fi

@@ -7,13 +7,10 @@ services:
     ports:
       - "5432"
 
-  web: &web
-    build: .
+  web:
+    image: miriamtech/table_locks${BUILD_TAG}
     environment:
       PASSENGER_APP_ENV: development
-    volumes:
-      - .:/home/app/table_locks
-    ports:
-      - "80:80"
-    links:
+    depends_on:
       - db
+    entrypoint: bin/wrap_dev_container

@@ -1,0 +1,65 @@
+#!/bin/bash -e
+#
+# There are a number of difficulties associated with developing within
+# containers.
+#
+# First of all, we bind-mount our local web app over the top of the one in the
+# container, and thus we must also install our gem/yarn dependencies. That's
+# easy to forget, so this script reminds the developer.
+#
+# Second, dealing with file ownership clashes between the container and the
+# host is always a battle. We can get around that with uid/gid mapping, but
+# that requires everyone's hosts to be setup properly to do that, and it's
+# unclear if docker compose supports it the same way docker does. This script
+# works around that by updating the app user to have the same uid/gid as the
+# user on the host.
+
+if [ ! -f '/.dockerenv' ]; then
+	echo "This command should only be run within a docker container" >&2
+	exit 1
+fi
+
+project_root="$(CDPATH="" cd -- "$(dirname -- "$0")" && pwd)/.."
+
+function check_dependencies()
+{
+	root="$1"
+
+	if [ ! -d "$root/vendor/bundle" ]; then
+		echo "WARNING: vendor/bundle doesn't exist, do you need to run 'bundle install'?" >&2
+	fi
+}
+
+function setup_app_user()
+{
+	root="$1"
+
+	# First of all, in order to determine the uid/gid of the host user, take it
+	# from the .git directory
+	gid="$(stat -c %g "$root/.git")"
+	uid="$(stat -c %u "$root/.git")"
+
+	# Now let's pretend the app user's home directory is somewhere else,
+	# otherwise usermod will spend a lot of time chowning it as we make these
+	# changes. SOME things will need to be chowned, but we'll do it on our own
+	# at the end.
+	usermod -d /tmp/non-existent-home app
+	groupmod -g "$gid" app
+	usermod -u "$uid" app
+
+	# Now set the home directory back and selectively chown a few things
+	usermod -d /home/app app
+	chown app:app /home/app /home/app/.bash*
+
+	# Our bind-mounted application is here, and should already be owned by the
+	# app user since it should be owned by the host user. However, there are a
+	# number of hidden directories here (caches and the like) that are owned by
+	# 9999, and are too large to chown in a reasonable amount of time. Just
+	# toast them all and let them be re-created as necessary.
+	find /home/app -maxdepth 1 -name '.*' ! -name '.' ! -name '.bash*' -exec rm -rf {} \;
+}
+
+check_dependencies "$project_root"
+setup_app_user "$project_root"
+
+exec "$@"

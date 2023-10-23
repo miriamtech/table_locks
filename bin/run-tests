@@ -1,0 +1,114 @@
+#!/bin/bash -e
+#
+# Invoke me with:
+#    All:       bin/run_tests.sh
+#    File:      bin/run_tests.sh {relative_path}
+#    Single:    bin/run_tests.sh {relative_path} "{regex}"
+
+# Re-exec: run this script in docker container if necessary
+ROOT_DIR="$(realpath "$(CDPATH="" cd -- "$(dirname -- "$0")" && pwd)/../")"
+. "$ROOT_DIR/bin/in-container" "$0" "$@"
+
+run_rails_tests() {
+  FILENAME="$1"
+  TEST_NAME="$2"
+  GENERATE_REPORTS="$3"
+  export GENERATE_REPORTS
+
+  COMMAND="rake test"
+  export BUILD_REVISION=""
+
+  if [ -n "$FILENAME" ]; then
+    TEST="$FILENAME"
+  fi
+
+  if [ ! -z "${TEST_NAME}" ]; then
+    if [[ "${TEST_NAME}" =~ 'test_' ]]; then
+      METHOD_NAME=${TEST_NAME}
+    else
+      METHOD_NAME=test_${TEST_NAME//[[:space:]]/_}
+    fi
+    echo "Running: ${METHOD_NAME}"
+    export TESTOPTS="-n '${METHOD_NAME}'"
+  fi
+
+  eval $COMMAND "$TEST"
+}
+
+run_static_tests() {
+  echo "Static tests temporarily disabled"
+  # bundle exec rubocop
+}
+
+
+JS=false
+STATIC=false
+RAILS=true
+GENERATE_REPORTS=false
+
+while getopts ":hars" opt; do
+  case $opt in
+    s)
+      JS=false
+      STATIC=true
+      RAILS=false
+      ;;
+    a)
+      JS=true
+      STATIC=true
+      RAILS=true
+      ;;
+    r)
+      GENERATE_REPORTS=true
+      ;;
+    h)
+      echo "Usage:"
+      echo "  run_tests.sh [-h -r -s -a] [test file path] [line number] [pattern]"
+      echo ""
+      echo "  Run tests within docker container. By default this is only the"
+      echo "  Rails tests, but this behavior can be configured via options."
+      echo ""
+      echo "  -h: Display this help message"
+      echo "  -r: Generate junit test reports"
+      echo "  -s: Run static (Rubocop) tests"
+      echo "  -a: Run all tests, both Rails and static"
+      exit 0
+      ;;
+    \?)
+      echo "Invalid option: -$OPTARG" >&2
+      exit 1
+      ;;
+    :)
+      echo "Option -$OPTARG requires an argument" >&2
+      exit 1
+      ;;
+  esac
+done
+shift $((OPTIND-1))
+
+FILENAME=$1
+TEST_NAME=$2
+
+: "${MINITEST_REPORTERS_REPORTS_DIR:=.test-reports/junit}"
+: "${SIMPLECOV_COVERAGE_DIR:=.test-reports/coverage}"
+
+export MINITEST_REPORTERS_REPORTS_DIR
+export SIMPLECOV_COVERAGE_DIR
+
+if [ -n "$FILENAME" ]; then
+  FILENAME="$(realpath "$FILENAME")"
+fi
+
+if [ "$STATIC" = true ]; then
+  echo ""
+  echo "== STATIC TESTS =="
+  echo ""
+  run_static_tests
+fi
+
+if [ "$RAILS" = true ]; then
+  echo ""
+  echo "== RAILS TESTS =="
+  echo ""
+  run_rails_tests "$FILENAME" "$TEST_NAME" "$GENERATE_REPORTS"
+fi

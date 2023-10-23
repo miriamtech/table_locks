@@ -1,0 +1,93 @@
+#!/bin/bash -e
+#
+# Run tests against configured appraisals. See `appraise -h` for usage.
+
+# Re-exec: run this script in docker container if necessary
+ROOT_DIR="$(realpath "$(CDPATH="" cd -- "$(dirname -- "$0")" && pwd)/../")"
+. "$ROOT_DIR/bin/in-container" "$0" "$@"
+
+appraisals_array=()
+while getopts ":ha:" opt; do
+	case $opt in
+		a)
+			appraisals_array+=("$OPTARG")
+			;;
+		h)
+			echo "Usage:"
+			echo "  appraise [-h] [ -a <appraisal> ]..."
+			echo ""
+			echo "  Run tests against appraisals. By default it will run all of them,"
+			echo "  but that can be customized via the options."
+			echo ""
+			echo "  -h: Display this help message"
+			echo "  -a <appraisal>: Run tests for this specific appraisal. Can be"
+			echo "                  specified multiple times."
+			exit 0
+			;;
+		\?)
+			echo "Invalid option: -$OPTARG" >&2
+			exit 1
+			;;
+		:)
+			echo "Option -$OPTARG requires an argument" >&2
+			exit 1
+			;;
+	esac
+done
+shift $((OPTIND-1))
+
+if [ $# -ne 0 ]; then
+	echo "No positional arguments are supported. Please run 'appraise -h' for help."
+	exit 1
+fi
+
+export RAILS_ENV=test
+
+# Make sure the database is setup before we do anything. Don't run the seeds,
+# though.
+bundle exec bash -c 'cd test/dummy; rake db:create'
+bundle exec bash -c 'cd test/dummy; rake db:schema:load'
+
+# Now generate the gemfiles for all appraisals
+bundle exec appraisal generate
+
+if [ "${#appraisals_array[@]}" -eq "0" ]; then
+	# No appraisals were specified, so we're going to run our tests against all
+	# appraisals. We could do that simply with `appraisal ./bin/run-tests`,
+	# but it doesn't do a good job of making it obvious which appraisal is
+	# currently under test. Let's do that loop ourselves so we can manage
+	# printing. First step, get a list of all appraisals.
+	readarray -t appraisals_array <<< "$(bundle exec appraisal list)"
+fi
+
+# Install all gems required for the appraisals
+for appraisal in "${appraisals_array[@]}"; do
+	printf "\n== Appraisal being installed: %s ==\n\n" "$appraisal"
+
+	# We neeed to use a special version of bundler for Rails 4, which means
+	# we can't lean on appraisal to do what we need.
+	if [ "$appraisal" = "rails-4" ]; then
+		gem install bundler -v 1.17.3
+		bundle _1.17.3_ install --gemfile=gemfiles/rails_4.gemfile
+	else
+		bundle exec appraisal "$appraisal" bundle install
+	fi
+done
+
+# Loop through the appraisals, running tests against each with a helpful print
+# specifying which one is currently under test
+for appraisal in "${appraisals_array[@]}"; do
+	printf "\n== Appraisal under test: %s ==\n\n" "$appraisal"
+	export MINITEST_REPORTERS_REPORTS_DIR=".test-reports/$appraisal/junit"
+	export JEST_JUNIT_OUTPUT_DIR="$MINITEST_REPORTERS_REPORTS_DIR"
+	export SIMPLECOV_COVERAGE_DIR=".test-reports/$appraisal/coverage"
+	export JEST_COVERAGE_DIR="$SIMPLECOV_COVERAGE_DIR"
+
+	# We neeed to use a special version of bundler for Rails 4, which means
+	# we can't lean on appraisal to do what we need.
+	if [ "$appraisal" = "rails-4" ]; then
+		BUNDLE_GEMFILE=gemfiles/rails_4.gemfile bundle _1.17.3_ exec ./bin/run-tests -ar
+	else
+		bundle exec appraisal "$appraisal" ./bin/run-tests -ar
+	fi
+done
