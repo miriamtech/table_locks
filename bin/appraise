@@ -79,9 +79,7 @@ done
 for appraisal in "${appraisals_array[@]}"; do
 	printf "\n== Appraisal under test: %s ==\n\n" "$appraisal"
 	export MINITEST_REPORTERS_REPORTS_DIR=".test-reports/$appraisal/junit"
-	export JEST_JUNIT_OUTPUT_DIR="$MINITEST_REPORTERS_REPORTS_DIR"
 	export SIMPLECOV_COVERAGE_DIR=".test-reports/$appraisal/coverage"
-	export JEST_COVERAGE_DIR="$SIMPLECOV_COVERAGE_DIR"
 
 	# We neeed to use a special version of bundler for Rails 4, which means
 	# we can't lean on appraisal to do what we need.
