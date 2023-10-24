@@ -18,6 +18,5 @@ ADD --chown=app .bundle Gemfile* *.gemspec /home/app/${PROJECT_NAME}/
 ADD --chown=app lib/table_locks/version.rb lib/table_locks/
 RUN setuser app bundle config set --local deployment true
 RUN setuser app bundle install
-RUN set -eu; for ruby in $EXTRA_RUBY_VERSIONS; do setuser app bash -lc "rvm-exec $ruby bundle install --deployment && rvm-exec $ruby bundle clean"; done
 
 ADD --chown=app . /home/app/table_locks

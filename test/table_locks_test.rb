@@ -1,7 +1,11 @@
 require 'test_helper'
 
 class TableLocksTest < ActiveSupport::TestCase
-  self.use_transactional_tests = false
+  if Rails::VERSION::MAJOR < 5
+    self.use_transactional_fixtures = false
+  else
+    self.use_transactional_tests = false
+  end
   
   def setup
     @threads = []

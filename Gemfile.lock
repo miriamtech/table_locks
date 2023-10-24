@@ -3,7 +3,7 @@ PATH
   specs:
     table_locks (0.0.1)
       pg (>= 0.18, < 2.0)
-      rails (>= 5, < 8)
+      rails (>= 4, < 8)
 
 GEM
   remote: https://rubygems.org/
